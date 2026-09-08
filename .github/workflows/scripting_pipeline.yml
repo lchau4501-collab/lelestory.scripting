@@ -60,8 +60,15 @@ jobs:
           EOF
 
       - name: Run Scripting & GK2 Engine
+        env:
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          AGNES_API_KEYS: ${{ secrets.AGNES_API_KEYS }}
+          AGNES_BASE_URL: ${{ secrets.AGNES_BASE_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKENS: ${{ secrets.CLOUDFLARE_API_TOKENS }}
         run: |
           python src/gatekeeper2.py --idea artifacts/idea_gk1.json --output artifacts/script_gk2.json
+
 
       - name: Upload Script Artifact
         uses: actions/upload-artifact@v4
