@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Dict, Any, List
 from pinyin_utils import text_to_pinyin
+from multi_ai_provider import MultiAIProvider
+import re
 
 logger = logging.getLogger("lelestory.scripting")
 
@@ -12,10 +14,55 @@ class ScriptGenerator:
         self.batch_id = idea_data.get("batch_id", 1)
         self.hanzi = idea_data.get("hanzi_target", "学习")
         self.concept = idea_data.get("concept_summary", "")
+        self.ai = MultiAIProvider()
 
     def generate_script(self) -> Dict[str, Any]:
-        """Generates line-by-line script payload based on theme."""
+        """Generates line-by-line script payload using MultiAIProvider with template fallback."""
+        prompt = f"""Generate a short educational dialogue for Chinese learners.
+Topic/Hanzi: {self.hanzi} ({self.concept}).
+Theme: {self.theme}.
+Return STRICT JSON array with 3 to 4 dialogue lines:
+[
+  {{"speaker": "Narrator", "zh": "...", "vi": "..."}},
+  {{"speaker": "LeLe", "zh": "...", "vi": "..."}}
+]"""
+        system_prompt = "You are an expert Chinese language teacher. Provide accurate Simplified Chinese and Vietnamese translations in valid JSON array only."
+        
+        raw_text = self.ai.call_ai(prompt, system_prompt)
+        if raw_text:
+            try:
+                clean = re.sub(r"```(?:json)?", "", raw_text).replace("```", "").strip()
+                parsed = json.loads(clean)
+                if isinstance(parsed, list) and len(parsed) >= 2:
+                    lines = []
+                    for item in parsed:
+                        zh = item.get("zh", "").strip()
+                        vi = item.get("vi", "").strip()
+                        spk = item.get("speaker", "LeLe")
+                        if zh and vi:
+                            lines.append({
+                                "speaker": spk,
+                                "zh": zh,
+                                "pinyin": text_to_pinyin(zh),
+                                "vi": vi
+                            })
+                    if len(lines) >= 2:
+                        return {
+                            "batch_id": self.batch_id,
+                            "theme": self.theme,
+                            "topic": self.idea_data.get("topic", ""),
+                            "hanzi_target": self.hanzi,
+                            "lines": lines,
+                            "total_lines": len(lines),
+                            "status": "Scripted",
+                            "generator": "MultiAI_Live"
+                        }
+            except Exception:
+                pass
+
+        # Robust Fallback to Theme Templates
         lines = []
+
         if self.theme == "HANZIDEGUSHI":
             lines = [
                 {"speaker": "Narrator", "zh": f"Bạn có biết nguồn gốc chữ {self.hanzi} không?", "pinyin": text_to_pinyin(f"Bạn có biết nguồn gốc chữ {self.hanzi} không?"), "vi": f"Bạn có biết nguồn gốc chữ {self.hanzi} không?"},
