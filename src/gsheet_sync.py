@@ -41,6 +41,41 @@ def get_gspread_client() -> Optional[gspread.Client]:
     logger.warning("No Google Service Account credentials found.")
     return None
 
+import urllib.request
+import re
+
+APPS_SCRIPT_WEBHOOK = os.environ.get(
+    "DOCS_WEBHOOK_URL",
+    "https://script.google.com/macros/s/AKfycbzSn6Jv0fCltjFtm-_noIRJDUOz9BtViNFOmLsaLTSuZefu3Ij6O09mgBhFcnDcVjtP/exec"
+)
+
+def create_gdoc_via_webhook(folder_id: str, title: str, content: str) -> Optional[str]:
+    """Calls Google Apps Script Webhook to create native Google Doc in project folder."""
+    if not APPS_SCRIPT_WEBHOOK:
+        return None
+    try:
+        payload = {
+            "folderId": folder_id,
+            "title": f"Script - 《{title}》",
+            "content": content
+        }
+        req = urllib.request.Request(
+            APPS_SCRIPT_WEBHOOK,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if data.get("success"):
+                doc_url = data.get("url") or f"https://docs.google.com/document/d/{data.get('id')}/edit"
+                logger.info(f"✅ Created GDoc via Webhook: {doc_url}")
+                return doc_url
+            else:
+                logger.error(f"❌ Webhook error creating GDoc: {data.get('error')}")
+    except Exception as e:
+        logger.error(f"❌ Failed to call Google Docs Webhook: {e}")
+    return None
+
 def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
     if not os.path.exists(script_path):
         logger.error(f"Script file not found: {script_path}")
@@ -98,10 +133,22 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
 
         full_script_text = "\n".join(script_blocks)
 
-        # 2. Format Image Prompts (Tab 2 on top, Tab 1 below, 1 line each)
+        # 2. Extract Folder ID from Col 5 (GFolder)
+        gfolder_url = ws.cell(row_idx, 5).value or ""
+        folder_id = ""
+        if "folders/" in gfolder_url:
+            folder_id = gfolder_url.split("folders/")[1].split("?")[0].strip()
+        elif "id=" in gfolder_url:
+            folder_id = gfolder_url.split("id=")[1].split("&")[0].strip()
+
+        # 3. Create Google Doc in Folder via Webhook and obtain GDoc URL for Col F
+        doc_url = create_gdoc_via_webhook(folder_id, title, full_script_text)
+        script_cell_value = doc_url if doc_url else full_script_text
+
+        # 4. Format Image Prompts (Tab 2 on top, Tab 1 below, 1 line each)
         prompt_text = prompts.get("formatted_gdoc_text", "")
 
-        # 3. Format Metadata (YouTube, TikTok, Facebook with required hashtags)
+        # 5. Format Metadata (YouTube, TikTok, Facebook with required hashtags)
         meta_text = metadata.get("formatted_metadata_txt", "")
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -109,20 +156,20 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         # Invariance: Row Index == Batch ID (#)
         # Col 1: #
         # Col 4: Status -> "Script" (as specified in storydraft)
-        # Col 6: Script (F) -> full_script_text
+        # Col 6: Script (F) -> GDoc URL strictly
         # Col 8: Image Prompt (H) -> prompt_text
         # Col 11: metadata (K) -> meta_text
         # Col 17: Notes (Q)
         ws.update_cell(row_idx, 1, str(row_idx))
         ws.update_cell(row_idx, 4, "Script")
-        ws.update_cell(row_idx, 6, full_script_text)
+        ws.update_cell(row_idx, 6, script_cell_value)
         if prompt_text:
             ws.update_cell(row_idx, 8, prompt_text)
         if meta_text:
             ws.update_cell(row_idx, 11, meta_text)
-        ws.update_cell(row_idx, 17, f"GK2 Passed - Story Scripted with Natural English Translation on {timestamp}")
+        ws.update_cell(row_idx, 17, f"GK2 Passed - Story Scripted in GDoc with English Translation on {timestamp}")
 
-        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', Total Lines={len(lines)}, Vocab={len(vocab)}")
+        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', GDoc={doc_url}, Total Lines={len(lines)}, Vocab={len(vocab)}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to sync scripting to GSheet: {e}")

@@ -28,11 +28,13 @@ def test_script_generator():
     assert len(script["lines"]) >= 3
 
 def test_prompt_builder():
-    script = {"batch_id": 5, "theme": "HANZIDEGUSHI", "topic": "Test", "hanzi_target": "休"}
+    script = {"batch_id": 2, "title": "吃菜的大狼", "story_plot": "Test plot", "lines": []}
     pb = PromptBuilder(script)
     prompts = pb.build_prompts()
-    assert "instagram_carousel" in prompts
-    assert prompts["instagram_carousel"][0].startswith("[IG-POST005-SLIDE1-1x1-ST2]")
+    assert "tab1_scenes" in prompts
+    assert "tab2_elements" in prompts
+    assert "formatted_gdoc_text" in prompts
+    assert "charming watercolor storybook illustration" in prompts["fixed_style"]
 
 def test_gatekeeper2_pass():
     idea = {
