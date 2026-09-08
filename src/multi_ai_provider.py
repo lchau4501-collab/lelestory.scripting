@@ -81,31 +81,41 @@ class MultiAIProvider:
         return None
 
     def _call_gemini(self, prompt: str, system_prompt: str, key: str, temperature: float) -> Optional[str]:
+        # Google AI Studio API: supports ?key= or x-goog-api-key header for both AQ.Ab8RN and AIzaSy keys
         models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
-        headers = {"Content-Type": "application/json"}
-        if key.startswith("AQ."):
-            headers["Authorization"] = f"Bearer {key}"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key
+        }
         
+        last_err = ""
         for m in models:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
-            if not key.startswith("AQ."):
-                url += f"?key={key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
             payload = {
                 "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": temperature}
             }
             if system_prompt:
                 payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
-            res = requests.post(url, json=payload, headers=headers, timeout=25)
-            if res.status_code == 200:
-                data = res.json()
-                parts = data.get("candidates", [])[0].get("content", {}).get("parts", [])
-                text = "".join([p.get("text", "") for p in parts if p.get("text")])
-                if text:
-                    return text
-            elif res.status_code == 429:
-                raise Exception("Rate limit (429)")
-        return None
+            try:
+                res = requests.post(url, json=payload, headers=headers, timeout=25)
+                if res.status_code == 200:
+                    data = res.json()
+                    parts = data.get("candidates", [])[0].get("content", {}).get("parts", [])
+                    text = "".join([p.get("text", "") for p in parts if p.get("text")])
+                    if text:
+                        return text
+                elif res.status_code == 429:
+                    raise Exception("Rate limit (429)")
+                else:
+                    last_err = f"HTTP {res.status_code}: {res.text[:150]}"
+            except Exception as e:
+                last_err = str(e)
+                if "429" in str(e):
+                    raise
+                continue
+        raise Exception(f"Gemini calls failed across models. Last: {last_err}")
+
 
     def _call_agnes(self, prompt: str, system_prompt: str, key: str, temperature: float) -> Optional[str]:
         url = f"{self.agnes_base_url.rstrip('/')}/chat/completions"
@@ -115,6 +125,7 @@ class MultiAIProvider:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
+        # Test candidate models on Agnes
         candidate_models = ["gemini-2.5-flash", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-chat"]
         for mod in candidate_models:
             payload = {
@@ -126,9 +137,16 @@ class MultiAIProvider:
                 res = requests.post(url, headers=headers, json=payload, timeout=30)
                 if res.status_code == 200:
                     return res.json()["choices"][0]["message"]["content"]
-            except Exception:
+            except Exception as e:
+                err_msg = str(e)
+                try:
+                    if hasattr(e, 'response') and e.response is not None:
+                        err_msg = f"HTTP {e.response.status_code}: {e.response.text[:150]}"
+                except Exception:
+                    pass
+                last_err = f"Model {mod} -> {err_msg}"
                 continue
-        raise Exception(f"Agnes HTTP calls failed across models at {url}")
+        raise Exception(f"Agnes HTTP calls failed across models at {url}. Last: {last_err}")
 
     def _call_cloudflare(self, prompt: str, system_prompt: str, token: str) -> Optional[str]:
         url = f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account_id}/ai/run/@cf/meta/llama-3.1-70b-instruct"
@@ -143,3 +161,4 @@ class MultiAIProvider:
         if res.status_code == 200:
             return res.json().get("result", {}).get("response", "")
         raise Exception(f"Cloudflare Workers AI HTTP {res.status_code}: {res.text}")
+
