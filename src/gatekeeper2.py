@@ -7,62 +7,55 @@ from pinyin_utils import validate_pinyin_syllables
 logger = logging.getLogger("lelestory.scripting")
 
 class Gatekeeper2:
-    """Gatekeeper 2: Validates script dialogue, pinyin formatting, visual prompts, and metadata integrity."""
+    """Gatekeeper 2: Validates story script dialogue (ZH, Pinyin, EN), vocabulary, and image prompts."""
 
     def validate(self, combined_payload: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
-        batch_id = combined_payload.get("batch_id", 0)
+        batch_id = combined_payload.get("batch_id", 2)
         script = combined_payload.get("script", {})
         prompts = combined_payload.get("prompts", {})
         metadata = combined_payload.get("metadata", {})
 
         # 1. Script line check
         lines = script.get("lines", [])
-        if not lines or len(lines) < 2:
-            msg = f"GK2 FAIL: Script for batch #{batch_id} must have at least 2 lines."
+        if not lines or len(lines) < 3:
+            msg = f"GK2 FAIL: Script for batch #{batch_id} must have at least 3 story lines."
             logger.error(msg)
             combined_payload["status"] = "GK2_Failed"
             combined_payload["gk2_error"] = msg
             return False, msg, combined_payload
 
         for idx, line in enumerate(lines):
-            zh = line.get("zh", "")
-            py = line.get("pinyin", "")
-            vi = line.get("vi", "")
-            if not zh or not py or not vi:
-                msg = f"GK2 FAIL: Line #{idx+1} in batch #{batch_id} is missing zh, pinyin, or vi."
+            zh = line.get("zh", "").strip()
+            py = line.get("pinyin", "").strip()
+            en = line.get("en", "").strip()
+            if not zh or not py or not en:
+                msg = f"GK2 FAIL: Line #{idx+1} in batch #{batch_id} is missing zh, pinyin, or English translation."
                 logger.error(msg)
                 combined_payload["status"] = "GK2_Failed"
                 combined_payload["gk2_error"] = msg
                 return False, msg, combined_payload
 
-        # 2. Prompt prefix format check
-        prefix_pattern = re.compile(r"^\[(PIN|IG|FB|CARD|COMIC)-POST\d{3}-[A-Z0-9]+-\d+x\d+-ST\d\]")
-        ig_prompts = prompts.get("instagram_carousel", [])
-        if not ig_prompts:
-            msg = f"GK2 FAIL: Missing instagram_carousel prompts in batch #{batch_id}."
+        # 2. Vocabulary check
+        vocab = script.get("vocabulary", [])
+        if len(vocab) < 5:
+            msg = f"GK2 FAIL: Must have at least 5 key vocabulary items in batch #{batch_id}."
             logger.error(msg)
             combined_payload["status"] = "GK2_Failed"
             combined_payload["gk2_error"] = msg
             return False, msg, combined_payload
 
-        for prompt_str in ig_prompts:
-            if not prefix_pattern.match(prompt_str):
-                msg = f"GK2 FAIL: Invalid prompt prefix format in '{prompt_str[:30]}...'."
-                logger.error(msg)
-                combined_payload["status"] = "GK2_Failed"
-                combined_payload["gk2_error"] = msg
-                return False, msg, combined_payload
-
-        # 3. Metadata check
-        if not metadata.get("title") or not metadata.get("description"):
-            msg = f"GK2 FAIL: Missing metadata title or description for batch #{batch_id}."
+        # 3. Visual Prompts check
+        tab1 = prompts.get("tab1_scenes", [])
+        tab2 = prompts.get("tab2_elements", [])
+        if not tab1 or not tab2:
+            msg = f"GK2 FAIL: Missing Tab 1 scenes or Tab 2 elements prompts in batch #{batch_id}."
             logger.error(msg)
             combined_payload["status"] = "GK2_Failed"
             combined_payload["gk2_error"] = msg
             return False, msg, combined_payload
 
         combined_payload["status"] = "GK2_Passed"
-        logger.info(f"GK2 PASSED for batch #{batch_id}")
+        logger.info(f"GK2 PASSED for story batch #{batch_id}")
         return True, "GK2 Passed", combined_payload
 
 if __name__ == "__main__":
@@ -93,7 +86,10 @@ if __name__ == "__main__":
     combined = {
         "batch_id": int(batch_num),
         "row_id": int(batch_num),
-        "theme": idea.get("theme", "HANZIDEGUSHI"),
+        "title": idea.get("title", ""),
+        "story_plot": idea.get("story_plot", ""),
+        "gfolder_id": idea.get("gfolder_id", ""),
+        "gfolder_url": idea.get("gfolder_url", ""),
         "script": script_data,
         "prompts": prompts_data,
         "metadata": meta_data,

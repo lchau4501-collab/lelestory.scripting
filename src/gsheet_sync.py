@@ -13,26 +13,26 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1b6LNl7JHRiCsjK1w9VuD86GLqAfmSOtDUOm5whrGdH0")
 TAB_NAME = "story"
 
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
 def get_gspread_client() -> Optional[gspread.Client]:
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
     env_json = os.environ.get("GCP_SERVICE_ACCOUNT_JSON") or os.environ.get("SERVICE_ACCOUNT_JSON")
     if env_json and env_json.strip():
         try:
             info = json.loads(env_json)
-            creds = Credentials.from_service_account_info(info, scopes=scopes)
+            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
             return gspread.authorize(creds)
         except Exception as e:
             logger.error(f"Failed to load credentials from env JSON: {e}")
             return None
 
-    # Fallback to local profile
     local_path = os.path.expanduser("~/.cloud-profiles/lelehoctiengtrung/google_sa/service_account.json")
     if os.path.exists(local_path):
         try:
-            creds = Credentials.from_service_account_file(local_path, scopes=scopes)
+            creds = Credentials.from_service_account_file(local_path, scopes=SCOPES)
             return gspread.authorize(creds)
         except Exception as e:
             logger.error(f"Failed to load credentials from file {local_path}: {e}")
@@ -59,48 +59,70 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         ws = ss.worksheet(TAB_NAME)
 
         row_id = data.get("batch_id") or data.get("row_id") or target_row
-        row_idx = max(int(row_id), 2)
+        row_idx = max(int(row_id), 2)  # Invariance: Row Index == Batch ID (#), >= 2
         
+        title = data.get("title", "")
         script = data.get("script", {})
         lines = script.get("lines", [])
+        vocab = script.get("vocabulary", [])
+        outro = script.get("outro", {})
         prompts = data.get("prompts", {})
         metadata = data.get("metadata", {})
 
-        # Format script lines
-        formatted_script = []
+        # 1. Format Script: 4 Scenes + Vocabulary + Outro (ZH + Pinyin + Natural English)
+        script_blocks = [f"【故事剧本 / STORY SCRIPT: 《{title}》】\n"]
         for idx, line in enumerate(lines, 1):
+            s_num = line.get("scene_num", idx)
             spk = line.get("speaker", "Narrator")
             zh = line.get("zh", "")
             py = line.get("pinyin", "")
-            vi = line.get("vi", "")
-            formatted_script.append(f"[Phân cảnh {idx} - {spk}]\nZH: {zh}\nPY: {py}\nVI: {vi}")
-        script_text = "\n\n".join(formatted_script)
+            en = line.get("en", "")
+            script_blocks.append(
+                f"[Scene {s_num} - {spk}]\n"
+                f"ZH: {zh}\n"
+                f"PY: {py}\n"
+                f"EN: {en}\n"
+            )
 
-        # Format prompts
-        ig_prompts = prompts.get("instagram_carousel", [])
-        prompt_text = "\n---\n".join(ig_prompts) if ig_prompts else ""
+        if vocab:
+            script_blocks.append("【重点词汇 / KEY VOCABULARY】")
+            for v_idx, v in enumerate(vocab, 1):
+                script_blocks.append(f"{v_idx}. {v.get('word')} ({v.get('pinyin')}): {v.get('en')}")
+            script_blocks.append("")
 
-        # Format metadata
-        meta_json_str = json.dumps(metadata, ensure_ascii=False)
+        if outro:
+            script_blocks.append("【循环结尾 / OUTRO LOOP】")
+            script_blocks.append(f"ZH: {outro.get('zh')}")
+            script_blocks.append(f"PY: {outro.get('pinyin')}")
+            script_blocks.append(f"EN: {outro.get('en')}\n")
+
+        full_script_text = "\n".join(script_blocks)
+
+        # 2. Format Image Prompts (Tab 2 on top, Tab 1 below, 1 line each)
+        prompt_text = prompts.get("formatted_gdoc_text", "")
+
+        # 3. Format Metadata (YouTube, TikTok, Facebook with required hashtags)
+        meta_text = metadata.get("formatted_metadata_txt", "")
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Invariance: Row Index == Batch ID (#)
-        # Column 1: #
-        # Column 4: Status (D) -> GK2_Passed
-        # Column 6: Script (F)
-        # Column 8: Image Prompt (H)
-        # Column 11: metadata (K)
-        # Column 17: Notes (Q)
+        # Col 1: #
+        # Col 4: Status -> "Script" (as specified in storydraft)
+        # Col 6: Script (F) -> full_script_text
+        # Col 8: Image Prompt (H) -> prompt_text
+        # Col 11: metadata (K) -> meta_text
+        # Col 17: Notes (Q)
         ws.update_cell(row_idx, 1, str(row_idx))
-        ws.update_cell(row_idx, 4, "GK2_Passed")
-        ws.update_cell(row_idx, 6, script_text)
+        ws.update_cell(row_idx, 4, "Script")
+        ws.update_cell(row_idx, 6, full_script_text)
         if prompt_text:
             ws.update_cell(row_idx, 8, prompt_text)
-        if meta_json_str:
-            ws.update_cell(row_idx, 11, meta_json_str)
-        ws.update_cell(row_idx, 17, f"GK2 Scripted & Validated via Live AI on {timestamp}")
+        if meta_text:
+            ws.update_cell(row_idx, 11, meta_text)
+        ws.update_cell(row_idx, 17, f"GK2 Passed - Story Scripted with Natural English Translation on {timestamp}")
 
-        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='GK2_Passed', Total Lines={len(lines)}")
+        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', Total Lines={len(lines)}, Vocab={len(vocab)}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to sync scripting to GSheet: {e}")
