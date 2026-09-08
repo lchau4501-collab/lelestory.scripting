@@ -82,11 +82,12 @@ class MultiAIProvider:
 
     def _call_gemini(self, prompt: str, system_prompt: str, key: str, temperature: float) -> Optional[str]:
         # Google AI Studio API: supports ?key= or x-goog-api-key header for both AQ.Ab8RN and AIzaSy keys
-        models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+        models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.5-pro"]
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": key
         }
+
         
         last_err = ""
         for m in models:
