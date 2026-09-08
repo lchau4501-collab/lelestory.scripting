@@ -75,6 +75,7 @@ jobs:
       - name: Sync Scripting to Google Sheet
         env:
           GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+          DOCS_WEBHOOK_URL: ${{ secrets.DOCS_WEBHOOK_URL }}
         run: |
           ROW_ARG="${{ github.event.inputs.batch_id || github.event.client_payload.batch_id || '2' }}"
           python src/gsheet_sync.py --script artifacts/script_gk2.json --row-id "$ROW_ARG"
