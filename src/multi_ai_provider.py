@@ -25,7 +25,8 @@ class MultiAIProvider:
         # 2. Parse Agnes Keys & Official Base URL (https://apihub.agnes-ai.com/v1)
         raw_agnes = os.environ.get("AGNES_API_KEYS") or os.environ.get("AGNES_API_KEY") or ""
         self.agnes_keys = [k.strip() for k in re.split(r"[\n,;]+", raw_agnes) if k.strip()]
-        self.agnes_base_url = os.environ.get("AGNES_BASE_URL", "https://apihub.agnes-ai.com/v1")
+        self.agnes_base_url = os.environ.get("AGNES_BASE_URL", "").strip() or "https://apihub.agnes-ai.com/v1"
+
 
         # 3. Parse Cloudflare Tokens & Account ID
         raw_cf = os.environ.get("CLOUDFLARE_API_TOKENS") or os.environ.get("CLOUDFLARE_API_TOKEN") or ""
