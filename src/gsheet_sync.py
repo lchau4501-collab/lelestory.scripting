@@ -141,12 +141,16 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         elif "id=" in gfolder_url:
             folder_id = gfolder_url.split("id=")[1].split("&")[0].strip()
 
-        # 3. Create Google Doc in Folder via Webhook and obtain GDoc URL for Col F
-        doc_url = create_gdoc_via_webhook(folder_id, title, full_script_text)
+        # 3. Create Google Doc for Script in Folder via Webhook and obtain GDoc URL for Col F
+        doc_url = create_gdoc_via_webhook(folder_id, f"Script - 《{title}》", full_script_text)
         script_cell_value = doc_url if doc_url else full_script_text
 
-        # 4. Format Image Prompts (Tab 2 on top, Tab 1 below, 1 line each)
+        # 4. Format Image Prompts and Create GDoc "Image prompt" in Folder via Webhook for Col H
         prompt_text = prompts.get("formatted_gdoc_text", "")
+        prompt_doc_url = None
+        if prompt_text:
+            prompt_doc_url = create_gdoc_via_webhook(folder_id, "Image prompt", prompt_text)
+        prompt_cell_value = prompt_doc_url if prompt_doc_url else prompt_text
 
         # 5. Format Metadata (YouTube, TikTok, Facebook with required hashtags)
         meta_text = metadata.get("formatted_metadata_txt", "")
@@ -157,19 +161,19 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         # Col 1: #
         # Col 4: Status -> "Script" (as specified in storydraft)
         # Col 6: Script (F) -> GDoc URL strictly
-        # Col 8: Image Prompt (H) -> prompt_text
+        # Col 8: Image Prompt (H) -> Image Prompt GDoc URL strictly
         # Col 11: metadata (K) -> meta_text
         # Col 17: Notes (Q)
         ws.update_cell(row_idx, 1, str(row_idx))
         ws.update_cell(row_idx, 4, "Script")
         ws.update_cell(row_idx, 6, script_cell_value)
-        if prompt_text:
-            ws.update_cell(row_idx, 8, prompt_text)
+        if prompt_cell_value:
+            ws.update_cell(row_idx, 8, prompt_cell_value)
         if meta_text:
             ws.update_cell(row_idx, 11, meta_text)
-        ws.update_cell(row_idx, 17, f"GK2 Passed - Story Scripted in GDoc with English Translation on {timestamp}")
+        ws.update_cell(row_idx, 17, f"GK2 Passed - Story & Image Prompts in GDoc with English Translation on {timestamp}")
 
-        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', GDoc={doc_url}, Total Lines={len(lines)}, Vocab={len(vocab)}")
+        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', Script GDoc={doc_url}, ImagePrompt GDoc={prompt_doc_url}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to sync scripting to GSheet: {e}")
