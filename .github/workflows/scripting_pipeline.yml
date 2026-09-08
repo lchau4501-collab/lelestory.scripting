@@ -83,4 +83,4 @@ jobs:
           token: ${{ secrets.PIPELINE_PAT }}
           repository: naadld/lelestory.omni
           event-type: script_gk2_passed
-          client-payload: '{"artifact_name": "script-gk2-artifact", "run_id": "${{ github.run_id }}"}'
+          client-payload: '{"artifact_name": "script-gk2-artifact", "run_id": "${{ github.run_id }}", "batch_id": "${{ github.event.inputs.batch_id || github.event.client_payload.batch_id || 2 }}"}'
