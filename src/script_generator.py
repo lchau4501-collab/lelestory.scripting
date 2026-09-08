@@ -33,10 +33,9 @@ REQUIREMENTS:
    - en: NATURAL, IDIOMATIC ENGLISH TRANSLATION (Strictly English! NO Vietnamese!)
 3. Extract 5 key educational vocabulary words from this story with:
    - word: Simplified Chinese word
-   - en: English definition
-4. Include the outro loop sentence:
-   - zh: "那是故事里的生词，快记下来吧！"
-   - en: "Those are the words from our story, remember to write them down!"
+4. Include the outro loop sentence (connecting seamlessly back to the Title when video loops):
+   - zh: "这些生词来自故事……"
+   - en: "Those vocabulary comes from the story..."
 
 OUTPUT FORMAT: Return STRICT JSON ONLY:
 {{
@@ -79,8 +78,8 @@ OUTPUT FORMAT: Return STRICT JSON ONLY:
     {{"word": "...", "en": "..."}}
   ],
   "outro": {{
-    "zh": "那是故事里的生词，快记下来吧！",
-    "en": "Those are the words from our story, remember to write them down!"
+    "zh": "这些生词来自故事……",
+    "en": "Those vocabulary comes from the story..."
   }}
 }}"""
         system_prompt = "You are a master children's Chinese storybook author and translator. Output valid JSON only, with natural English translations."
@@ -120,8 +119,8 @@ OUTPUT FORMAT: Return STRICT JSON ONLY:
                                 "en": e
                             })
 
-                    outro_zh = parsed.get("outro", {}).get("zh", "那是故事里的生词，快记下来吧！")
-                    outro_en = parsed.get("outro", {}).get("en", "Those are the words from our story, remember to write them down!")
+                    outro_zh = parsed.get("outro", {}).get("zh", "这些生词来自故事……")
+                    outro_en = parsed.get("outro", {}).get("en", "Those vocabulary comes from the story...")
 
                     return {
                         "batch_id": self.batch_id,
@@ -186,7 +185,7 @@ OUTPUT FORMAT: Return STRICT JSON ONLY:
             {"word": "朋友", "pinyin": text_to_pinyin("朋友"), "en": "Friends"}
         ]
 
-        outro_zh = "那是故事里的生词，快记下来吧！"
+        outro_zh = "这些生词来自故事……"
         return {
             "batch_id": self.batch_id,
             "title": self.title,
@@ -196,7 +195,7 @@ OUTPUT FORMAT: Return STRICT JSON ONLY:
             "outro": {
                 "zh": outro_zh,
                 "pinyin": text_to_pinyin(outro_zh),
-                "en": "Those are the words from our story, remember to write them down!"
+                "en": "Those vocabulary comes from the story..."
             },
             "status": "Scripted",
             "generator": "StoryScript_Fallback"
