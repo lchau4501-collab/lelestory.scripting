@@ -127,8 +127,8 @@ class MultiAIProvider:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        # Test candidate models on Agnes (prioritizing agnes-2.5-flash)
-        candidate_models = ["agnes-2.5-flash", "gemini-2.5-flash", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-chat"]
+        # Test candidate models on Agnes (prioritizing agnes-3.0-flash and agnes-2.5-flash)
+        candidate_models = ["agnes-3.0-flash", "agnes-2.5-flash", "gemini-2.5-flash", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-chat"]
         for mod in candidate_models:
             payload = {
                 "model": mod,
