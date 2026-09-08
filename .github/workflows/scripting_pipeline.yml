@@ -1,0 +1,79 @@
+name: Scripting & Gatekeeper 2 Pipeline
+
+on:
+  repository_dispatch:
+    types: [idea_gk1_passed]
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: 'Batch ID'
+        required: false
+        default: '1'
+
+jobs:
+  script_and_gk2:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Unit Tests
+        run: |
+          pytest tests/
+
+      - name: Download Ideation Artifact (if dispatched)
+        if: github.event_name == 'repository_dispatch'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.PIPELINE_PAT }}
+          workflow: ideation_pipeline.yml
+          name: idea-gk1-artifact
+          path: artifacts/
+          repo: naadld/lelestory.ideation
+          run_id: ${{ github.event.client_payload.run_id }}
+
+      - name: Create Fallback Idea Artifact (if manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p artifacts
+          cat << 'EOF' > artifacts/idea_gk1.json
+          {
+            "batch_id": ${{ github.event.inputs.batch_id || 1 }},
+            "theme": "HANZIDEGUSHI",
+            "topic": "Chiết tự chữ 休",
+            "hanzi_target": "休",
+            "hsk_level": 1,
+            "concept_summary": "Con người (人) tựa vào cây (木) để nghỉ ngơi.",
+            "status": "GK1_Passed"
+          }
+          EOF
+
+      - name: Run Scripting & GK2 Engine
+        run: |
+          python src/gatekeeper2.py --idea artifacts/idea_gk1.json --output artifacts/script_gk2.json
+
+      - name: Upload Script Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: script-gk2-artifact
+          path: artifacts/script_gk2.json
+
+      - name: Dispatch to Omni Repository
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PIPELINE_PAT }}
+          repository: naadld/lelestory.omni
+          event-type: script_gk2_passed
+          client-payload: '{"artifact_name": "script-gk2-artifact", "run_id": "${{ github.run_id }}"}'
