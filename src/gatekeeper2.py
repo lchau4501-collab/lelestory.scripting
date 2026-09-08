@@ -86,8 +86,13 @@ if __name__ == "__main__":
     mb = MetadataBuilder(script_data)
     meta_data = mb.build_metadata()
 
+    batch_num = idea.get("batch_id") or idea.get("row_id") or 2
+    if int(batch_num) < 2:
+        batch_num = 2
+
     combined = {
-        "batch_id": idea.get("batch_id", 1),
+        "batch_id": int(batch_num),
+        "row_id": int(batch_num),
         "theme": idea.get("theme", "HANZIDEGUSHI"),
         "script": script_data,
         "prompts": prompts_data,

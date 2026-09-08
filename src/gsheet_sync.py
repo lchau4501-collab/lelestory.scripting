@@ -58,8 +58,8 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         ss = client.open_by_key(SPREADSHEET_ID)
         ws = ss.worksheet(TAB_NAME)
 
-        row_id = data.get("batch_id") or target_row
-        row_idx = int(row_id)
+        row_id = data.get("batch_id") or data.get("row_id") or target_row
+        row_idx = max(int(row_id), 2)
         
         script = data.get("script", {})
         lines = script.get("lines", [])

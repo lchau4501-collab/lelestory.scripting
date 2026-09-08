@@ -10,6 +10,9 @@ on:
         required: false
         default: '1'
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
 jobs:
   script_and_gk2:
     runs-on: ubuntu-22.04
