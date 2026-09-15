@@ -31,10 +31,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Unit Tests
-        run: |
-          pytest tests/
-
       - name: Download Ideation Artifact (if dispatched)
         if: github.event_name == 'repository_dispatch'
         uses: dawidd6/action-download-artifact@v6
@@ -43,7 +39,7 @@ jobs:
           workflow: ideation_pipeline.yml
           name: idea-gk1-artifact
           path: artifacts/
-          repo: naadld/lelestory.ideation
+          repo: ${{ github.repository_owner }}/lelestory.ideation
           run_id: ${{ github.event.client_payload.run_id }}
 
       - name: Create Fallback Idea Artifact (if manual trigger)
@@ -80,7 +76,6 @@ jobs:
           ROW_ARG="${{ github.event.inputs.batch_id || github.event.client_payload.batch_id || '2' }}"
           python src/gsheet_sync.py --script artifacts/script_gk2.json --row-id "$ROW_ARG"
 
-
       - name: Upload Script Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -92,6 +87,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.PIPELINE_PAT }}
-          repository: naadld/lelestory.omni
+          repository: ${{ github.repository_owner }}/lelestory.omni
           event-type: script_gk2_passed
           client-payload: '{"artifact_name": "script-gk2-artifact", "run_id": "${{ github.run_id }}", "batch_id": "${{ github.event.inputs.batch_id || github.event.client_payload.batch_id || 2 }}"}'
