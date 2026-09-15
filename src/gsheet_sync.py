@@ -168,6 +168,41 @@ def enforce_tab_story_row_height_21px(creds: Credentials, spreadsheet_id: str = 
         logger.error(f"Failed to enforce 21px row height on tab '{TAB_NAME}': {e}")
         return False
 
+def create_google_doc(folder_id: str, title: str, content: str) -> Optional[str]:
+    """Creates Google Doc in folder via User OAuth API or Apps Script Webhook."""
+    # Try User OAuth API first if available locally
+    oauth_path = os.path.expanduser("~/.cloud-profiles/lelehoctiengtrung/google_oauth/user_oauth2.json")
+    if os.path.exists(oauth_path):
+        try:
+            from google.oauth2.credentials import Credentials as UserOAuthCreds
+            from google.auth.transport.requests import Request as AuthRequest
+            with open(oauth_path, "r", encoding="utf-8") as f:
+                tdata = json.load(f)
+            ucreds = UserOAuthCreds.from_authorized_user_info(tdata)
+            if ucreds.expired and ucreds.refresh_token:
+                ucreds.refresh(AuthRequest())
+                with open(oauth_path, "w", encoding="utf-8") as f:
+                    f.write(ucreds.to_json())
+            docs_svc = build("docs", "v1", credentials=ucreds)
+            drive_svc = build("drive", "v3", credentials=ucreds)
+            doc = docs_svc.documents().create(body={"title": title}).execute()
+            doc_id = doc.get("documentId")
+            if content and content.strip():
+                docs_svc.documents().batchUpdate(
+                    documentId=doc_id,
+                    body={"requests": [{"insertText": {"location": {"index": 1}, "text": content.replace("\x00", "")}}]}
+                ).execute()
+            if folder_id:
+                drive_svc.files().update(fileId=doc_id, addParents=folder_id, fields="id, parents").execute()
+            doc_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+            logger.info(f"✅ Created GDoc via User OAuth: {doc_url} ('{title}')")
+            return doc_url
+        except Exception as e:
+            logger.warning(f"Failed to create GDoc via User OAuth ({e}), trying Webhook...")
+
+    # Fallback to Apps Script Webhook
+    return create_gdoc_via_webhook(folder_id, title, content)
+
 def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
     if not os.path.exists(script_path):
         logger.error(f"Script file not found: {script_path}")
@@ -238,19 +273,23 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         elif "id=" in gfolder_url:
             folder_id = gfolder_url.split("id=")[1].split("&")[0].strip()
 
-        # 3. Create Google Doc for Script in Folder via Webhook and obtain GDoc URL for Col F
-        doc_url = create_gdoc_via_webhook(folder_id, f"Script - 《{title}》", full_script_text)
+        # 3. Create Google Doc for Script in Folder and obtain GDoc URL for Col F
+        doc_url = create_google_doc(folder_id, f"Script - 《{title}》", full_script_text)
         script_cell_value = doc_url if doc_url else full_script_text
 
-        # 4. Format Image Prompts and Create GDoc "Image prompt" in Folder via Webhook for Col H
+        # 4. Format Image Prompts and Create GDoc "Prompt - 《{title}》" in Folder for Col H
         prompt_text = prompts.get("formatted_gdoc_text", "")
         prompt_doc_url = None
         if prompt_text:
-            prompt_doc_url = create_gdoc_via_webhook(folder_id, "Image prompt", prompt_text)
+            prompt_doc_url = create_google_doc(folder_id, f"Prompt - 《{title}》", prompt_text)
         prompt_cell_value = prompt_doc_url if prompt_doc_url else prompt_text
 
-        # 5. Format Metadata (YouTube, TikTok, Facebook with required hashtags)
+        # 5. Format Metadata and Create GDoc "Metadata - 《{title}》" in Folder for Col K
         meta_text = metadata.get("formatted_metadata_txt", "")
+        meta_doc_url = None
+        if meta_text:
+            meta_doc_url = create_google_doc(folder_id, f"Metadata - 《{title}》", meta_text)
+        meta_cell_value = meta_doc_url if meta_doc_url else meta_text
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -263,11 +302,11 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         ]
         if prompt_cell_value:
             batch_updates.append({"range": f"H{row_idx}", "values": [[prompt_cell_value]]})
-        if meta_text:
-            batch_updates.append({"range": f"K{row_idx}", "values": [[meta_text]]})
+        if meta_cell_value:
+            batch_updates.append({"range": f"K{row_idx}", "values": [[meta_cell_value]]})
         batch_updates.append({
             "range": f"Q{row_idx}",
-            "values": [[f"GK2 Passed - Story (8-10 scenes) & Image Prompts in GDoc with English on {timestamp}"]]
+            "values": [[f"GK2 Passed - Story, Image Prompts & Metadata in GDoc with English on {timestamp}"]]
         })
 
         ws.batch_update(batch_updates)
@@ -275,7 +314,7 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         # Enforce strict 21px row height invariant
         enforce_tab_story_row_height_21px(creds, SPREADSHEET_ID)
 
-        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}' in 1 batch: Status='Script', Script GDoc={doc_url}, ImagePrompt GDoc={prompt_doc_url}")
+        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}' in 1 batch: Status='Script', Script GDoc={doc_url}, ImagePrompt GDoc={prompt_doc_url}, Metadata GDoc={meta_doc_url}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to sync scripting to GSheet: {e}")
