@@ -27,7 +27,7 @@ def validate_pinyin_syllables(text: str, pinyin_str: str) -> bool:
     Validates 1:1 syllable count between Chinese characters (excluding punctuation) and pinyin syllables.
     """
     hanzi_chars = [c for c in text if '\u4e00' <= c <= '\u9fa5']
-    # Filter pinyin words
-    pinyin_tokens = [token for token in re.split(r'[\s，。！？,\.!\?]+', pinyin_str) if token.strip()]
+    # Filter pinyin words containing alphabet characters
+    pinyin_tokens = [token for token in re.split(r'[\s，。！？：；“”‘’（）…—,\.!\?:;\x27\"\)\]\(\]]+', pinyin_str) if token.strip() and re.search(r'[a-zA-Z]', token)]
     
     return len(hanzi_chars) == len(pinyin_tokens)

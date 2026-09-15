@@ -5,13 +5,16 @@ logger = logging.getLogger("lelestory.scripting")
 
 class MetadataBuilder:
     def __init__(self, script_payload: Dict[str, Any]):
-        self.batch_id = script_payload.get("batch_id", 2)
+        self.batch_id = script_payload.get("batch_id") or script_payload.get("row_id") or 2
         self.title = script_payload.get("title", "吃菜的大狼")
         self.plot = script_payload.get("story_plot", "")
         self.vocab = script_payload.get("vocabulary", [])
 
     def build_metadata(self) -> Dict[str, Any]:
-        """Builds multi-platform metadata titles and descriptions for YouTube, TikTok, and Facebook."""
+        """
+        Builds multi-platform metadata titles and descriptions for YouTube, TikTok, and Facebook.
+        Strictly English and Chinese content, zero Vietnamese.
+        """
         vocab_str = ", ".join([f"{v.get('word')} ({v.get('en')})" for v in self.vocab])
         hashtags_str = "#lelehoctiengtrung #hsk #hoctiengtrung #chinesestory"
 
@@ -32,9 +35,9 @@ class MetadataBuilder:
         # Facebook
         fb_title = f"Chinese Storybook #{self.batch_id}: 《{self.title}》"
         fb_desc = (
-            f"🏮 Câu chuyện tiếng Trung hôm nay: 《{self.title}》\n\n"
-            f"📖 Tóm tắt / Plot: {self.plot}\n\n"
-            f"💡 Từ vựng trọng điểm / Key Vocabulary:\n"
+            f"🏮 Today's Chinese Story: 《{self.title}》\n\n"
+            f"📖 Story Synopsis: {self.plot}\n\n"
+            f"💡 Key Chinese Vocabulary:\n"
             + "\n".join([f"• {v.get('word')} ({v.get('pinyin')}): {v.get('en')}" for v in self.vocab])
             + f"\n\n{hashtags_str}"
         )

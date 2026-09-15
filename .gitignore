@@ -1,4 +1,9 @@
 *.md
 docs/
 *.zip
+*.tar.gz
 .env
+__pycache__/
+*.py[cod]
+artifacts/
+.pytest_cache/

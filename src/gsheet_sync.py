@@ -3,28 +3,73 @@ import sys
 import json
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
+import urllib.request
+import re
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 logger = logging.getLogger("lelestory.gsheet")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "1b6LNl7JHRiCsjK1w9VuD86GLqAfmSOtDUOm5whrGdH0")
 TAB_NAME = "story"
+TARGET_ROW_HEIGHT_PX = 21
+
+# Canonical Direct View URL Pattern for Google Drive files (Video Col L, HTML Col J)
+DIRECT_VIEW_REGEX = re.compile(r"^https://drive\.google\.com/file/d/[a-zA-Z0-9_-]+/view\Z")
+DRIVE_FILE_VIEW_REGEX = DIRECT_VIEW_REGEX
+
+import importlib.util
+from pathlib import Path
+
+# Standard Column Mapping on tab 'story'
+COL_MAP = {
+    "id": "A",
+    "title": "B",
+    "plot": "C",
+    "status": "D",
+    "gfolder": "E",
+    "script": "F",
+    "voice": "G",
+    "prompt": "H",
+    "image": "I",
+    "html": "J",
+    "metadata": "K",
+    "video": "L",
+    "created_at": "P",
+    "notes": "Q"
+}
+
+_gha_sync_path = Path(__file__).resolve().parent.parent.parent / "deploy" / "gha_public_workflows" / "scripts" / "gsheet_sync.py"
+if _gha_sync_path.exists():
+    try:
+        _spec = importlib.util.spec_from_file_location("_gha_gsheet_sync", str(_gha_sync_path))
+        if _spec and _spec.loader:
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            build_enforce_row_height_request = getattr(_mod, "build_enforce_row_height_request", None)
+            enforce_21px_row_height = getattr(_mod, "enforce_21px_row_height", None)
+            update_story_row = getattr(_mod, "update_story_row", None)
+            verify_sheet_invariants = getattr(_mod, "verify_sheet_invariants", None)
+            get_service_account_credentials = getattr(_mod, "get_service_account_credentials", None)
+            execute_with_retry = getattr(_mod, "execute_with_retry", None)
+            COL_MAP = getattr(_mod, "COL_MAP", COL_MAP)
+    except Exception:
+        pass
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
-def get_gspread_client() -> Optional[gspread.Client]:
+def get_credentials() -> Optional[Credentials]:
     env_json = os.environ.get("GCP_SERVICE_ACCOUNT_JSON") or os.environ.get("SERVICE_ACCOUNT_JSON")
     if env_json and env_json.strip():
         try:
             info = json.loads(env_json)
-            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
-            return gspread.authorize(creds)
+            return Credentials.from_service_account_info(info, scopes=SCOPES)
         except Exception as e:
             logger.error(f"Failed to load credentials from env JSON: {e}")
             return None
@@ -32,8 +77,7 @@ def get_gspread_client() -> Optional[gspread.Client]:
     local_path = os.path.expanduser("~/.cloud-profiles/lelehoctiengtrung/google_sa/service_account.json")
     if os.path.exists(local_path):
         try:
-            creds = Credentials.from_service_account_file(local_path, scopes=SCOPES)
-            return gspread.authorize(creds)
+            return Credentials.from_service_account_file(local_path, scopes=SCOPES)
         except Exception as e:
             logger.error(f"Failed to load credentials from file {local_path}: {e}")
             return None
@@ -41,8 +85,17 @@ def get_gspread_client() -> Optional[gspread.Client]:
     logger.warning("No Google Service Account credentials found.")
     return None
 
-import urllib.request
-import re
+def get_gspread_client() -> Optional[gspread.Client]:
+    creds = get_credentials()
+    if creds:
+        try:
+            return gspread.authorize(creds)
+        except Exception as e:
+            logger.error(f"Failed to authorize gspread client: {e}")
+            return None
+    return None
+
+import requests
 
 APPS_SCRIPT_WEBHOOK = os.environ.get(
     "DOCS_WEBHOOK_URL",
@@ -50,31 +103,70 @@ APPS_SCRIPT_WEBHOOK = os.environ.get(
 )
 
 def create_gdoc_via_webhook(folder_id: str, title: str, content: str) -> Optional[str]:
-    """Calls Google Apps Script Webhook to create native Google Doc in project folder."""
+    """
+    Calls Google Apps Script Webhook to create native Google Doc in project folder.
+    Uses title exactly as provided (e.g. 'Script - 《Title》' or 'Image prompt').
+    """
     if not APPS_SCRIPT_WEBHOOK:
         return None
     try:
         payload = {
             "folderId": folder_id,
-            "title": f"Script - 《{title}》",
+            "title": title,  # Passed title used directly, not hardcoded
             "content": content
         }
-        req = urllib.request.Request(
-            APPS_SCRIPT_WEBHOOK,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        resp = requests.post(APPS_SCRIPT_WEBHOOK, json=payload, timeout=60, allow_redirects=True)
+        if resp.status_code == 200:
+            data = resp.json()
             if data.get("success"):
                 doc_url = data.get("url") or f"https://docs.google.com/document/d/{data.get('id')}/edit"
-                logger.info(f"✅ Created GDoc via Webhook: {doc_url}")
+                logger.info(f"✅ Created GDoc via Webhook: {doc_url} ('{title}')")
                 return doc_url
             else:
-                logger.error(f"❌ Webhook error creating GDoc: {data.get('error')}")
+                logger.error(f"❌ Webhook error creating GDoc '{title}': {data.get('error')}")
+        else:
+            logger.error(f"❌ Webhook returned status {resp.status_code}: {resp.text}")
     except Exception as e:
         logger.error(f"❌ Failed to call Google Docs Webhook: {e}")
     return None
+
+def enforce_tab_story_row_height_21px(creds: Credentials, spreadsheet_id: str = SPREADSHEET_ID) -> bool:
+    """Enforces strict 21px row height invariant on tab 'story' via Google Sheets API v4 updateDimensionProperties."""
+    try:
+        service = build("sheets", "v4", credentials=creds)
+        ss = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        sheet_id = None
+        row_count = 100
+        for s in ss.get("sheets", []):
+            if s["properties"]["title"] == TAB_NAME:
+                sheet_id = s["properties"]["sheetId"]
+                row_count = s["properties"]["gridProperties"]["rowCount"]
+                break
+
+        if sheet_id is None:
+            logger.warning(f"Tab '{TAB_NAME}' not found in spreadsheet.")
+            return False
+
+        req = {
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "ROWS",
+                    "startIndex": 0,
+                    "endIndex": row_count
+                },
+                "properties": {
+                    "pixelSize": TARGET_ROW_HEIGHT_PX
+                },
+                "fields": "pixelSize"
+            }
+        }
+        service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": [req]}).execute()
+        logger.info(f"✅ Enforced strict {TARGET_ROW_HEIGHT_PX}px row height on tab '{TAB_NAME}' across {row_count} rows.")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to enforce 21px row height on tab '{TAB_NAME}': {e}")
+        return False
 
 def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
     if not os.path.exists(script_path):
@@ -83,6 +175,11 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
 
     with open(script_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    creds = get_credentials()
+    if not creds:
+        logger.warning("⚠️ Skipping GSheet sync: Credentials not available.")
+        return False
 
     client = get_gspread_client()
     if not client:
@@ -95,7 +192,7 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
 
         row_id = data.get("batch_id") or data.get("row_id") or target_row
         row_idx = max(int(row_id), 2)  # Invariance: Row Index == Batch ID (#), >= 2
-        
+
         title = data.get("title", "")
         script = data.get("script", {})
         lines = script.get("lines", [])
@@ -104,7 +201,7 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         prompts = data.get("prompts", {})
         metadata = data.get("metadata", {})
 
-        # 1. Format Script: 4 Scenes + Vocabulary + Outro (ZH + Pinyin + Natural English)
+        # 1. Format Script: 8–10 Scenes + Vocabulary + Outro (ZH + Pinyin + Natural English)
         script_blocks = [f"【故事剧本 / STORY SCRIPT: 《{title}》】\n"]
         for idx, line in enumerate(lines, 1):
             s_num = line.get("scene_num", idx)
@@ -158,22 +255,27 @@ def sync_scripting_to_sheet(script_path: str, target_row: int = 2):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Invariance: Row Index == Batch ID (#)
-        # Col 1: #
-        # Col 4: Status -> "Script" (as specified in storydraft)
-        # Col 6: Script (F) -> GDoc URL strictly
-        # Col 8: Image Prompt (H) -> Image Prompt GDoc URL strictly
-        # Col 11: metadata (K) -> meta_text
-        # Col 17: Notes (Q)
-        ws.update_cell(row_idx, 1, str(row_idx))
-        ws.update_cell(row_idx, 4, "Script")
-        ws.update_cell(row_idx, 6, script_cell_value)
+        # Batch update cells to eliminate 429 quota exhaustion:
+        batch_updates = [
+            {"range": f"A{row_idx}", "values": [[str(row_idx)]]},
+            {"range": f"D{row_idx}", "values": [["Script"]]},
+            {"range": f"F{row_idx}", "values": [[script_cell_value]]}
+        ]
         if prompt_cell_value:
-            ws.update_cell(row_idx, 8, prompt_cell_value)
+            batch_updates.append({"range": f"H{row_idx}", "values": [[prompt_cell_value]]})
         if meta_text:
-            ws.update_cell(row_idx, 11, meta_text)
-        ws.update_cell(row_idx, 17, f"GK2 Passed - Story & Image Prompts in GDoc with English Translation on {timestamp}")
+            batch_updates.append({"range": f"K{row_idx}", "values": [[meta_text]]})
+        batch_updates.append({
+            "range": f"Q{row_idx}",
+            "values": [[f"GK2 Passed - Story (8-10 scenes) & Image Prompts in GDoc with English on {timestamp}"]]
+        })
 
-        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}': Status='Script', Script GDoc={doc_url}, ImagePrompt GDoc={prompt_doc_url}")
+        ws.batch_update(batch_updates)
+
+        # Enforce strict 21px row height invariant
+        enforce_tab_story_row_height_21px(creds, SPREADSHEET_ID)
+
+        logger.info(f"🎉 Successfully synced Row #{row_idx} to GSheet tab '{TAB_NAME}' in 1 batch: Status='Script', Script GDoc={doc_url}, ImagePrompt GDoc={prompt_doc_url}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to sync scripting to GSheet: {e}")
