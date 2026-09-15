@@ -254,10 +254,11 @@ if __name__ == "__main__":
     if int(batch_num) < 2:
         batch_num = 2
 
+    story_title = script_data.get("title") or idea.get("title", "")
     combined = {
         "batch_id": int(batch_num),
         "row_id": int(batch_num),
-        "title": idea.get("title", ""),
+        "title": story_title,
         "story_plot": idea.get("story_plot", ""),
         "act_1": idea.get("act_1", ""),
         "act_2": idea.get("act_2", ""),

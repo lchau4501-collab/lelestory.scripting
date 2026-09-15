@@ -15,8 +15,18 @@ VIETNAMESE_PATTERN = re.compile(
 class ScriptGenerator:
     def __init__(self, idea_data: Dict[str, Any]):
         self.idea_data = idea_data
-        self.batch_id = idea_data.get("batch_id") or idea_data.get("row_id") or 2
-        self.title = idea_data.get("title", "吃菜的大狼")
+        self.batch_id = int(idea_data.get("batch_id") or idea_data.get("row_id") or 2)
+        raw_title = str(idea_data.get("title", "")).strip()
+        if not raw_title:
+            if self.batch_id == 2:
+                raw_title = "吃菜的大狼"
+            elif self.batch_id == 3:
+                raw_title = "井底之蛙"
+            elif self.batch_id == 4:
+                raw_title = "小马过河"
+            else:
+                raw_title = "吃菜的大狼"
+        self.title = raw_title
         self.plot = idea_data.get("story_plot", "")
         self.act_1 = idea_data.get("act_1", "")
         self.act_2 = idea_data.get("act_2", "")
@@ -157,103 +167,266 @@ OUTPUT FORMAT: Return STRICT JSON ONLY:
                 logger.warning(f"Failed to parse AI story script: {e}")
 
         # Fallback to high quality scripted template based on 3-Act structure (8-10 scenes)
-        logger.info("Using high quality 8-10 scenes scripted fallback for story.")
+        logger.info(f"Using high quality 8-10 scenes scripted fallback for story '{self.title}' (#{self.batch_id}).")
         return self._get_fallback_script()
 
     def _get_fallback_script(self) -> Dict[str, Any]:
         """
-        Provides verified 8–10 progressive scenes fallback script following the 3-Act Narrative Arc.
-        For 《吃菜的大狼》, provides full 10 progressive scenes (Act 1: 1-2, Act 2: 3-7, Act 3: 8-10).
+        Provides verified 10 progressive scenes fallback script following the 3-Act Narrative Arc
+        for Row 2 (吃菜的大狼), Row 3 (井底之蛙), or Row 4 (小马过河).
         """
-        lines = [
-            # --- ACT 1: Exposition & Equilibrium (Scenes 1-2) ---
-            {
-                "scene_num": 1,
-                "speaker": "Narrator",
-                "zh": "在美丽茂密的大森林里，住着一只名叫罗罗的大灰狼。不同于普通的狼，他性情温和，最喜欢在菜园里种植新鲜蔬菜。",
-                "pinyin": text_to_pinyin("在美丽茂密的大森林里，住着一只名叫罗罗的大灰狼。不同于普通的狼，他性情温和，最喜欢在菜园里种植新鲜蔬菜。"),
-                "en": "In a beautiful, lush forest lived a big grey wolf named Luoluo. Unlike ordinary wolves, he had a gentle nature and loved growing fresh vegetables in his garden."
-            },
-            {
-                "scene_num": 2,
-                "speaker": "Narrator",
-                "zh": "森林里的小兔子和小松鼠依然对大灰狼充满恐惧。每次远远看到罗罗走来，大家都吓得赶紧躲进灌木丛中不敢出声。",
-                "pinyin": text_to_pinyin("森林里的小兔子和小松鼠依然对大灰狼充满恐惧。每次远远看到罗罗走来，大家都吓得赶紧躲进灌木丛中不敢出声。"),
-                "en": "The little rabbits and squirrels in the forest were still terrified of wolves. Whenever they saw Luoluo coming from afar, they quickly hid in the bushes without making a sound."
-            },
-            # --- ACT 2: Conflict & Escalation (Scenes 3-7) ---
-            {
-                "scene_num": 3,
-                "speaker": "Narrator",
-                "zh": "这天下午，天空突然乌云密布，一场狂暴的风雨呼啸而来，猛烈的狂风将山坡上的一棵巨大松树连根吹倒。",
-                "pinyin": text_to_pinyin("这天下午，天空突然乌云密布，一场狂暴的风雨呼啸而来，猛烈的狂风将山坡上的一棵巨大松树连根吹倒。"),
-                "en": "That afternoon, dark clouds suddenly gathered, and a furious storm howled in, with violent winds blowing down a massive pine tree on the hillside."
-            },
-            {
-                "scene_num": 4,
-                "speaker": "小白兔",
-                "zh": "救命啊！倒下的大树把我们兔洞的出口死死挡住了，我们出不去了！",
-                "pinyin": text_to_pinyin("救命啊！倒下的大树把我们兔洞的出口死死挡住了，我们出不去了！"),
-                "en": "Help! The fallen tree has blocked our burrow entrance, and we can't get out!"
-            },
-            {
-                "scene_num": 5,
-                "speaker": "Narrator",
-                "zh": "罗罗在风雨中听到了急切的呼救声。他没有躲回温暖的木屋，而是顶着狂风暴雨立刻奔向了兔洞。",
-                "pinyin": text_to_pinyin("罗罗在风雨中听到了急切的呼救声。他没有躲回温暖的木屋，而是顶着狂风暴雨立刻奔向了兔洞。"),
-                "en": "Luoluo heard the desperate cries in the storm. Instead of taking shelter in his warm cabin, he immediately braved the heavy rain and ran toward the burrow."
-            },
-            {
-                "scene_num": 6,
-                "speaker": "大灰狼罗罗",
-                "zh": "小兔子别怕！我力气大，我来帮你们把这根沉重的大树干搬开！",
-                "pinyin": text_to_pinyin("小兔子别怕！我力气大，我来帮你们把这根沉重的大树干搬开！"),
-                "en": "Don't be afraid, little rabbits! I am strong, and I will help you move this heavy tree trunk away!"
-            },
-            {
-                "scene_num": 7,
-                "speaker": "Narrator",
-                "zh": "浸透雨水的树干沉重无比，罗罗脚底打滑，爪子磨破了也绝不松手，咬紧牙关使出了全身的力气。",
-                "pinyin": text_to_pinyin("浸透雨水的树干沉重无比，罗罗脚底打滑，爪子磨破了也绝不松手，咬紧牙关使出了全身的力气。"),
-                "en": "The rain-soaked log was tremendously heavy; Luoluo's paws slipped and were grazed, but he refused to let go, clenching his teeth with all his might."
-            },
-            # --- ACT 3: Climax & Resolution (Scenes 8-10) ---
-            {
-                "scene_num": 8,
-                "speaker": "Narrator",
-                "zh": "伴随着一声大喝，罗罗终于将巨木推到一旁，小心翼翼地把受惊的小兔子们一个个安全抱了出来。",
-                "pinyin": text_to_pinyin("伴随着一声大喝，罗罗终于将巨木推到一旁，小心翼翼地把受惊的小兔子们一个个安全抱了出来。"),
-                "en": "With a mighty shout, Luoluo finally pushed the giant log aside and gently carried the frightened little rabbits out one by one to safety."
-            },
-            {
-                "scene_num": 9,
-                "speaker": "兔妈妈",
-                "zh": "罗罗，太感谢你了！原来你是一只真正善良温和的大狼，我们再也不怕你了！",
-                "pinyin": text_to_pinyin("罗罗，太感谢你了！原来你是一只真正善良温和的大狼，我们再也不怕你了！"),
-                "en": "Thank you so much, Luoluo! You are truly a kind and gentle wolf, and we are not afraid of you anymore!"
-            },
-            {
-                "scene_num": 10,
-                "speaker": "Narrator",
-                "zh": "风雨过后彩虹高挂，小动物们齐聚在罗罗家，开开心心地吃起热气腾腾的蔬菜火锅。善良化解了误会，带来了珍贵的友谊。",
-                "pinyin": text_to_pinyin("风雨过后彩虹高挂，小动物们齐聚在罗罗家，开开心心地吃起热气腾腾的蔬菜火锅。善良化解了误会，带来了珍贵的友谊。"),
-                "en": "After the storm a rainbow appeared, and the animals gathered at Luoluo's home to happily share a steaming vegetable hotpot. Kindness melted away prejudice and brought precious friendship."
-            }
-        ]
-
-        vocab = [
-            {"word": "大灰狼", "pinyin": text_to_pinyin("大灰狼"), "en": "Big grey wolf"},
-            {"word": "蔬菜", "pinyin": text_to_pinyin("蔬菜"), "en": "Vegetables"},
-            {"word": "害怕", "pinyin": text_to_pinyin("害怕"), "en": "Afraid / Scared"},
-            {"word": "帮忙", "pinyin": text_to_pinyin("帮忙"), "en": "Help / Lend a hand"},
-            {"word": "朋友", "pinyin": text_to_pinyin("朋友"), "en": "Friends"}
-        ]
+        if self.batch_id == 3 or "井底之蛙" in self.title:
+            title = "井底之蛙"
+            lines = [
+                {
+                    "scene_num": 1,
+                    "speaker": "Narrator",
+                    "zh": "在一口废弃已久的清凉浅井里，住着一只快乐无忧的小青蛙。",
+                    "pinyin": text_to_pinyin("在一口废弃已久的清凉浅井里，住着一只快乐无忧的小青蛙。"),
+                    "en": "In a cool, shallow, long-abandoned well lived a happy and carefree little frog."
+                },
+                {
+                    "scene_num": 2,
+                    "speaker": "小青蛙",
+                    "zh": "瞧我住在这里多么舒服呀！整口水井都是我的天下，我就是这里的大国王！",
+                    "pinyin": text_to_pinyin("瞧我住在这里多么舒服呀！整口水井都是我的天下，我就是这里的大国王！"),
+                    "en": "Look how comfortable I am here! This entire well is my kingdom, and I am the great king here!"
+                },
+                {
+                    "scene_num": 3,
+                    "speaker": "Narrator",
+                    "zh": "这天早晨，一只来自辽阔东海的大鳖慢慢爬到了井边，低头看着井里。",
+                    "pinyin": text_to_pinyin("这天早晨，一只来自辽阔东海的大鳖慢慢爬到了井边，低头看着井里。"),
+                    "en": "That morning, a large sea turtle from the vast Eastern Sea slowly crawled to the edge of the well and looked down inside."
+                },
+                {
+                    "scene_num": 4,
+                    "speaker": "小青蛙",
+                    "zh": "喂！外面的大个子，快跳进我的水井里来玩吧，这里的井水可舒服极了！",
+                    "pinyin": text_to_pinyin("喂！外面的大个子，快跳进我的水井里来玩吧，这里的井水可舒服极了！"),
+                    "en": "Hey! Big guy outside, jump into my well to play, the water here is wonderfully pleasant!"
+                },
+                {
+                    "scene_num": 5,
+                    "speaker": "Narrator",
+                    "zh": "大鳖试着把一只脚探进井里，可井口实在太狭窄，他的膝盖一下子被卡住了。",
+                    "pinyin": text_to_pinyin("大鳖试着把一只脚探进井里，可井口实在太狭窄，他的膝盖一下子被卡住了。"),
+                    "en": "The sea turtle tried to step a foot into the well, but the opening was far too narrow, and his knee was instantly stuck."
+                },
+                {
+                    "scene_num": 6,
+                    "speaker": "Narrator",
+                    "zh": "大鳖退了回来，微笑着给井底的小青蛙讲述起浩瀚无边的大海。",
+                    "pinyin": text_to_pinyin("大鳖退了回来，微笑着给井底的小青蛙讲述起浩瀚无边的大海。"),
+                    "en": "The sea turtle stepped back, smiling as he began to tell the little frog about the boundless, vast ocean."
+                },
+                {
+                    "scene_num": 7,
+                    "speaker": "东海大鳖",
+                    "zh": "大海有千里之广、万丈之深。大旱时海水不见减少，大涝时海水也不见增多。",
+                    "pinyin": text_to_pinyin("大海有千里之广、万丈之深。大旱时海水不见减少，大涝时海水也不见增多。"),
+                    "en": "The sea spans thousands of miles and reaches unfathomable depths. It neither recedes during droughts nor rises during floods."
+                },
+                {
+                    "scene_num": 8,
+                    "speaker": "Narrator",
+                    "zh": "小青蛙听得目瞪口呆，眼神里充满了从未有过的震撼与向往。",
+                    "pinyin": text_to_pinyin("小青蛙听得目瞪口呆，眼神里充满了从未有过的震撼与向往。"),
+                    "en": "The little frog listened in stunned awe, his eyes filled with unprecedented wonder and longing."
+                },
+                {
+                    "scene_num": 9,
+                    "speaker": "Narrator",
+                    "zh": "小青蛙羞愧地低下了头，终于意识到小水井之外的天地是多么浩瀚广阔。",
+                    "pinyin": text_to_pinyin("小青蛙羞愧地低下了头，终于意识到小水井之外的天地是多么浩瀚广阔。"),
+                    "en": "The little frog bowed his head in humility, finally realizing how vast and boundless the world outside his little well was."
+                },
+                {
+                    "scene_num": 10,
+                    "speaker": "Narrator",
+                    "zh": "小青蛙鼓起勇气奋力跳出井口，迈开脚步去拥抱更辽阔美丽的大千世界。",
+                    "pinyin": text_to_pinyin("小青蛙鼓起勇气奋力跳出井口，迈开脚步去拥抱更辽阔美丽的大千世界。"),
+                    "en": "Summoning all his courage, the little frog leaped out of the well and set off to embrace the magnificent, wider world."
+                }
+            ]
+            vocab = [
+                {"word": "青蛙", "pinyin": text_to_pinyin("青蛙"), "en": "Frog"},
+                {"word": "水井", "pinyin": text_to_pinyin("水井"), "en": "Well"},
+                {"word": "大海", "pinyin": text_to_pinyin("大海"), "en": "Sea / Ocean"},
+                {"word": "骄傲", "pinyin": text_to_pinyin("骄傲"), "en": "Proud / Arrogant"},
+                {"word": "世界", "pinyin": text_to_pinyin("世界"), "en": "World"}
+            ]
+        elif self.batch_id == 4 or "小马过河" in self.title:
+            title = "小马过河"
+            lines = [
+                {
+                    "scene_num": 1,
+                    "speaker": "Narrator",
+                    "zh": "小马和妈妈住在绿油油的草地上，是一只既懂事又活泼的小马。",
+                    "pinyin": text_to_pinyin("小马和妈妈住在绿油油的草地上，是一只既懂事又活泼的小马。"),
+                    "en": "A little horse lived with his mother on a lush green pasture, growing up as a sensible and lively colt."
+                },
+                {
+                    "scene_num": 2,
+                    "speaker": "马妈妈",
+                    "zh": "孩子，你已经长大了，帮妈妈把这半袋麦子驮到河对岸的磨坊去吧！",
+                    "pinyin": text_to_pinyin("孩子，你已经长大了，帮妈妈把这半袋麦子驮到河对岸的磨坊去吧！"),
+                    "en": "My child, you are grown now. Please help me carry this half sack of wheat to the mill across the river!"
+                },
+                {
+                    "scene_num": 3,
+                    "speaker": "Narrator",
+                    "zh": "小马高兴地驮着麦子飞快地跑着，一条哗哗流淌的小河突然挡住了去路。",
+                    "pinyin": text_to_pinyin("小马高兴地驮着麦子飞快地跑着，一条哗哗流淌的小河突然挡住了去路。"),
+                    "en": "The little horse happily trotted with the wheat until a rushing river suddenly blocked his path."
+                },
+                {
+                    "scene_num": 4,
+                    "speaker": "Narrator",
+                    "zh": "小马不知道河水有多深，正犹豫不决时，看见了在河边吃草的老牛伯伯。",
+                    "pinyin": text_to_pinyin("小马不知道河水有多深，正犹豫不决时，看见了在河边吃草的老牛伯伯。"),
+                    "en": "Uncertain of the water's depth, the little horse hesitated until he spotted an old ox grazing by the riverbank."
+                },
+                {
+                    "scene_num": 5,
+                    "speaker": "老牛",
+                    "zh": "水很浅，刚没过我的小腿肚，你完全可以放心地蹚过去！",
+                    "pinyin": text_to_pinyin("水很浅，刚没过我的小腿肚，你完全可以放心地蹚过去！"),
+                    "en": "The water is very shallow, only reaching my calves; you can safely wade across without worry!"
+                },
+                {
+                    "scene_num": 6,
+                    "speaker": "小松鼠",
+                    "zh": "小马别过去！水深得很呢！昨天我的一个同伴就是在这条河里被水冲走的！",
+                    "pinyin": text_to_pinyin("小马别过去！水深得很呢！昨天我的一个同伴就是在这条河里被水冲走的！"),
+                    "en": "Little horse, stop! The water is terribly deep! Just yesterday one of my companions was swept away in this river!"
+                },
+                {
+                    "scene_num": 7,
+                    "speaker": "Narrator",
+                    "zh": "小马左右为难，不知道该相信谁的话，只好叹了口气跑回家去问妈妈。",
+                    "pinyin": text_to_pinyin("小马左右为难，不知道该相信谁的话，只好叹了口气跑回家去问妈妈。"),
+                    "en": "Torn in a dilemma and unsure whom to believe, the little horse sighed and trotted back home to ask his mother."
+                },
+                {
+                    "scene_num": 8,
+                    "speaker": "马妈妈",
+                    "zh": "孩子，光听别人说是没用的。河水深不深，你必须亲自去试一试才知道。",
+                    "pinyin": text_to_pinyin("孩子，光听别人说是没用的。河水深不深，你必须亲自去试一试才知道。"),
+                    "en": "My child, relying solely on others' words is not enough. You must try it yourself to know how deep the river truly is."
+                },
+                {
+                    "scene_num": 9,
+                    "speaker": "Narrator",
+                    "zh": "小马鼓起勇气小心地下了河，发现水既不像老牛说的那么浅，也不像松鼠说的那么深。",
+                    "pinyin": text_to_pinyin("小马鼓起勇气小心地下了河，发现水既不像老牛说的那么浅，也不像松鼠说的那么深。"),
+                    "en": "Gathering his courage, the little horse stepped into the water and found it neither as shallow as the ox said nor as deep as the squirrel claimed."
+                },
+                {
+                    "scene_num": 10,
+                    "speaker": "Narrator",
+                    "zh": "小马顺利蹚过了河把麦子送到磨坊，开心地明白了凡事都要亲身实践的道理。",
+                    "pinyin": text_to_pinyin("小马顺利蹚过了河把麦子送到磨坊，开心地明白了凡事都要亲身实践的道理。"),
+                    "en": "The little horse successfully crossed the river to deliver the wheat, happily learning that true knowledge comes from personal practice."
+                }
+            ]
+            vocab = [
+                {"word": "小马", "pinyin": text_to_pinyin("小马"), "en": "Little horse / Pony"},
+                {"word": "小河", "pinyin": text_to_pinyin("小河"), "en": "River / Stream"},
+                {"word": "磨坊", "pinyin": text_to_pinyin("磨坊"), "en": "Mill"},
+                {"word": "浅", "pinyin": text_to_pinyin("浅"), "en": "Shallow"},
+                {"word": "尝试", "pinyin": text_to_pinyin("尝试"), "en": "Try / Attempt"}
+            ]
+        else:
+            title = "吃菜的大狼"
+            lines = [
+                # --- ACT 1: Exposition & Equilibrium (Scenes 1-2) ---
+                {
+                    "scene_num": 1,
+                    "speaker": "Narrator",
+                    "zh": "在美丽茂密的大森林里，住着一只名叫罗罗的大灰狼。不同于普通的狼，他性情温和，最喜欢在菜园里种植新鲜蔬菜。",
+                    "pinyin": text_to_pinyin("在美丽茂密的大森林里，住着一只名叫罗罗的大灰狼。不同于普通的狼，他性情温和，最喜欢在菜园里种植新鲜蔬菜。"),
+                    "en": "In a beautiful, lush forest lived a big grey wolf named Luoluo. Unlike ordinary wolves, he had a gentle nature and loved growing fresh vegetables in his garden."
+                },
+                {
+                    "scene_num": 2,
+                    "speaker": "Narrator",
+                    "zh": "森林里的小兔子和小松鼠依然对大灰狼充满恐惧。每次远远看到罗罗走来，大家都吓得赶紧躲进灌木丛中不敢出声。",
+                    "pinyin": text_to_pinyin("森林里的小兔子和小松鼠依然对大灰狼充满恐惧。每次远远看到罗罗走来，大家都吓得赶紧躲进灌木丛中不敢出声。"),
+                    "en": "The little rabbits and squirrels in the forest were still terrified of wolves. Whenever they saw Luoluo coming from afar, they quickly hid in the bushes without making a sound."
+                },
+                # --- ACT 2: Conflict & Escalation (Scenes 3-7) ---
+                {
+                    "scene_num": 3,
+                    "speaker": "Narrator",
+                    "zh": "这天下午，天空突然乌云密布，一场狂暴的风雨呼啸而来，猛烈的狂风将山坡上的一棵巨大松树连根吹倒。",
+                    "pinyin": text_to_pinyin("这天下午，天空突然乌云密布，一场狂暴的风雨呼啸而来，猛烈的狂风将山坡上的一棵巨大松树连根吹倒。"),
+                    "en": "That afternoon, dark clouds suddenly gathered, and a furious storm howled in, with violent winds blowing down a massive pine tree on the hillside."
+                },
+                {
+                    "scene_num": 4,
+                    "speaker": "小白兔",
+                    "zh": "救命啊！倒下的大树把我们兔洞的出口死死挡住了，我们出不去了！",
+                    "pinyin": text_to_pinyin("救命啊！倒下的大树把我们兔洞的出口死死挡住了，我们出不去了！"),
+                    "en": "Help! The fallen tree has blocked our burrow entrance, and we can't get out!"
+                },
+                {
+                    "scene_num": 5,
+                    "speaker": "Narrator",
+                    "zh": "罗罗在风雨中听到了急切的呼救声。他没有躲回温暖的木屋，而是顶着狂风暴雨立刻奔向了兔洞。",
+                    "pinyin": text_to_pinyin("罗罗在风雨中听到了急切的呼救声。他没有躲回温暖的木屋，而是顶着狂风暴雨立刻奔向了兔洞。"),
+                    "en": "Luoluo heard the desperate cries in the storm. Instead of taking shelter in his warm cabin, he immediately braved the heavy rain and ran toward the burrow."
+                },
+                {
+                    "scene_num": 6,
+                    "speaker": "大灰狼罗罗",
+                    "zh": "小兔子别怕！我力气大，我来帮你们把这根沉重的大树干搬开！",
+                    "pinyin": text_to_pinyin("小兔子别怕！我力气大，我来帮你们把这根沉重的大树干搬开！"),
+                    "en": "Don't be afraid, little rabbits! I am strong, and I will help you move this heavy tree trunk away!"
+                },
+                {
+                    "scene_num": 7,
+                    "speaker": "Narrator",
+                    "zh": "浸透雨水的树干沉重无比，罗罗脚底打滑，爪子磨破了也绝不松手，咬紧牙关使出了全身的力气。",
+                    "pinyin": text_to_pinyin("浸透雨水的树干沉重无比，罗罗脚底打滑，爪子磨破了也绝不松手，咬紧牙关使出了全身的力气。"),
+                    "en": "The rain-soaked log was tremendously heavy; Luoluo's paws slipped and were grazed, but he refused to let go, clenching his teeth with all his might."
+                },
+                # --- ACT 3: Climax & Resolution (Scenes 8-10) ---
+                {
+                    "scene_num": 8,
+                    "speaker": "Narrator",
+                    "zh": "伴随着一声大喝，罗罗终于将巨木推到一旁，小心翼翼地把受惊的小兔子们一个个安全抱了出来。",
+                    "pinyin": text_to_pinyin("伴随着一声大喝，罗罗终于将巨木推到一旁，小心翼翼地把受惊的小兔子们一个个安全抱了出来。"),
+                    "en": "With a mighty shout, Luoluo finally pushed the giant log aside and gently carried the frightened little rabbits out one by one to safety."
+                },
+                {
+                    "scene_num": 9,
+                    "speaker": "兔妈妈",
+                    "zh": "罗罗，太感谢你了！原来你是一只真正善良温和的大狼，我们再也不怕你了！",
+                    "pinyin": text_to_pinyin("罗罗，太感谢你了！原来你是一只真正善良温和的大狼，我们再也不怕你了！"),
+                    "en": "Thank you so much, Luoluo! You are truly a kind and gentle wolf, and we are not afraid of you anymore!"
+                },
+                {
+                    "scene_num": 10,
+                    "speaker": "Narrator",
+                    "zh": "风雨过后彩虹高挂，小动物们齐聚在罗罗家，开开心心地吃起热气腾腾的蔬菜火锅。善良化解了误会，带来了珍贵的友谊。",
+                    "pinyin": text_to_pinyin("风雨过后彩虹高挂，小动物们齐聚在罗罗家，开开心心地吃起热气腾腾的蔬菜火锅。善良化解了误会，带来了珍贵的友谊。"),
+                    "en": "After the storm a rainbow appeared, and the animals gathered at Luoluo's home to happily share a steaming vegetable hotpot. Kindness melted away prejudice and brought precious friendship."
+                }
+            ]
+            vocab = [
+                {"word": "大灰狼", "pinyin": text_to_pinyin("大灰狼"), "en": "Big grey wolf"},
+                {"word": "蔬菜", "pinyin": text_to_pinyin("蔬菜"), "en": "Vegetables"},
+                {"word": "害怕", "pinyin": text_to_pinyin("害怕"), "en": "Afraid / Scared"},
+                {"word": "帮忙", "pinyin": text_to_pinyin("帮忙"), "en": "Help / Lend a hand"},
+                {"word": "朋友", "pinyin": text_to_pinyin("朋友"), "en": "Friends"}
+            ]
 
         outro_zh = "这些生词来自故事……"
         return {
             "batch_id": self.batch_id,
             "row_id": self.batch_id,
-            "title": self.title,
+            "title": title,
             "story_plot": self.plot,
             "lines": lines,
             "vocabulary": vocab,
