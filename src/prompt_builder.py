@@ -469,27 +469,7 @@ class PromptBuilder:
                     "prompt": prompt_str
                 })
 
-        # 3. Vocabulary Flashcard Prompts (Vocab 1..5)
-        effective_vocab = [v for v in self.vocab if isinstance(v, dict) and v.get("word")]
-        if len(effective_vocab) < 5:
-            existing = {v.get("word") for v in effective_vocab}
-            for dv in DEFAULT_VOCABULARY:
-                if dv["word"] not in existing:
-                    effective_vocab.append(dv)
-                    if len(effective_vocab) >= 5:
-                        break
-
-        for idx, v in enumerate(effective_vocab[:5], 1):
-            w = str(v.get("word", "")).strip()
-            en = str(v.get("en", "")).strip()
-            clean_word_tag = re.sub(r"[^\w\u4e00-\u9fa5]", "", w) or str(idx)
-            scenes.append({
-                "scene": f"Vocabulary {idx}",
-                "tag": f"[Vocabulary-{idx}-{clean_word_tag}]",
-                "prompt": self.build_vocab_prompt(idx, w, en)
-            })
-
-        # 4. Outro Loop Prompt
+        # 3. Outro Loop Prompt (No separate vocab image prompts needed since Slide 11 is a 2-column card layout on story background)
         scenes.append({
             "scene": "Outro",
             "tag": "[Outro-Loop]",
